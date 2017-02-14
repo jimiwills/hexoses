@@ -1,1 +1,12 @@
-FE 99 EF
+# hexos1
+
+This is a markdown file, with Hex in the code blocks.
+It's intended to be used will bindown.pl.
+
+## Real mode
+
+We're in real mode, so any interrupts we need to call we should so now,
+before going to long mode.  We'll be going direct!
+
+
+
