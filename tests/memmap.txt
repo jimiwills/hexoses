@@ -1,0 +1,131 @@
+  Overview
+
+   +------------------------------------------------------------------------+
+   | start       | end        | size           | type        | description  |
+   |------------------------------------------------------------------------|
+   | Low Memory (the first MiB)                                             |
+   |------------------------------------------------------------------------|
+   |             |            |                | RAM -       | Real Mode    |
+   |             |            |                | partially   | IVT          |
+   | 0x00000000  | 0x000003FF | 1 KiB          | unusable    | (Interrupt   |
+   |             |            |                | (see above) | Vector       |
+   |             |            |                |             | Table)       |
+   |-------------+------------+----------------+-------------+--------------|
+   |             |            |                | RAM -       |              |
+   | 0x00000400  | 0x000004FF | 256 bytes      | partially   | BDA (BIOS    |
+   |             |            |                | unusable    | data area)   |
+   |             |            |                | (see above) |              |
+   |-------------+------------+----------------+-------------+--------------|
+   |             |            |                | RAM         |              |
+   | 0x00000500  | 0x00007BFF | almost 30 KiB  | (guaranteed | Conventional |
+   |             |            |                | free for    | memory       |
+   |             |            |                | use)        |              |
+   |-------------+------------+----------------+-------------+--------------|
+   | 0x00007C00  |            |                | RAM -       |              |
+   | (typical    | 0x00007DFF | 512 bytes      | partially   | Your OS      |
+   | location)   |            |                | unusable    | BootSector   |
+   |             |            |                | (see above) |              |
+   |-------------+------------+----------------+-------------+--------------|
+   |             |            |                | RAM         |              |
+   | 0x00007E00  | 0x0007FFFF | 480.5 KiB      | (guaranteed | Conventional |
+   |             |            |                | free for    | memory       |
+   |             |            |                | use)        |              |
+   |-------------+------------+----------------+-------------+--------------|
+   |             |            | approximately  | RAM (free   |              |
+   | 0x00080000  | 0x0009FBFF | 120 KiB,       | for use, if | Conventional |
+   |             |            | depending on   | it exists)  | memory       |
+   |             |            | EBDA size      |             |              |
+   |-------------+------------+----------------+-------------+--------------|
+   | 0x0009FC00  |            |                |             | EBDA         |
+   | (typical    | 0x0009FFFF | 1 KiB          | RAM         | (Extended    |
+   | location)   |            |                | (unusable)  | BIOS Data    |
+   |             |            |                |             | Area)        |
+   |-------------+------------+----------------+-------------+--------------|
+   |             |            |                | various     | Video        |
+   | 0x000A0000  | 0x000FFFFF | 384 KiB        | (unusable)  | memory, ROM  |
+   |             |            |                |             | Area         |
+   +------------------------------------------------------------------------+
+
+  BIOS Data Area (BDA)
+
+   The BDA is only partially standardized, and almost all the values stored
+   there are completely obsolete and uninteresting. The following is a
+   partial list. See the External Links references below for more detail.
+
+   +------------------------------------------------------------------------+
+   | address (size)            | description                                |
+   |---------------------------+--------------------------------------------|
+   | 0x0400 (4 words)          | IO ports for COM1-COM4 serial (each        |
+   |                           | address is 1 word, zero if none)           |
+   |---------------------------+--------------------------------------------|
+   | 0x0408 (3 words)          | IO ports for LPT1-LPT3 parallel (each      |
+   |                           | address is 1 word, zero if none)           |
+   |---------------------------+--------------------------------------------|
+   | 0x040E (word)             | EBDA base address >> 4 (usually!)          |
+   |---------------------------+--------------------------------------------|
+   | 0x0410 (word)             | packed bit flags for detected hardware     |
+   |---------------------------+--------------------------------------------|
+   | 0x0417 (word)             | keyboard state flags                       |
+   |---------------------------+--------------------------------------------|
+   | 0x041E (32 bytes)         | keyboard buffer                            |
+   |---------------------------+--------------------------------------------|
+   | 0x0449 (byte)             | Display Mode                               |
+   |---------------------------+--------------------------------------------|
+   | 0x044A (word)             | number of columns in text mode             |
+   |---------------------------+--------------------------------------------|
+   | 0x0463 (2 bytes, taken as | base IO port for video                     |
+   | a word)                   |                                            |
+   |---------------------------+--------------------------------------------|
+   | 0x046C (word)             | # of IRQ0 timer ticks since boot           |
+   |---------------------------+--------------------------------------------|
+   | 0x0475 (byte)             | # of hard disk drives detected             |
+   |---------------------------+--------------------------------------------|
+   | 0x0480 (word)             | keyboard buffer start                      |
+   |---------------------------+--------------------------------------------|
+   | 0x0482 (word)             | keyboard buffer end                        |
+   |---------------------------+--------------------------------------------|
+   | 0x0497 (byte)             | last keyboard LED/Shift key state          |
+   +------------------------------------------------------------------------+
+
+  Extended BIOS Data Area (EBDA)
+
+   You may see "maps" of the EBDA if you search the web. However, those maps
+   are for the original IBM BIOS EBDA. They do not apply to any current EBDA,
+   used by any current BIOS. The EBDA area is not standardized. It does
+   contain data that your OS will need, but you must do a bytewise pattern
+   search to find those tables. (See Plug-and-Play.)
+
+  ROM Area
+
+   +------------------------------------------------------------------------+
+   | start      | end        | size        | region/exception | description |
+   |------------------------------------------------------------------------|
+   | Standard usage of the ROM Area                                         |
+   |------------------------------------------------------------------------|
+   | 0x000A0000 | 0x000BFFFF | 128 KiB     | video RAM        | VGA display |
+   |            |            |             |                  | memory      |
+   |------------+------------+-------------+------------------+-------------|
+   | 0x000C0000 | 0x000C7FFF | 32 KiB      | ROM              | Video BIOS  |
+   |            |            | (typically) |                  |             |
+   |------------+------------+-------------+------------------+-------------|
+   |            |            | 160 KiB     | ROMs and         | Mapped      |
+   | 0x000C8000 | 0x000EFFFF | (typically) | unusable space   | hardware &  |
+   |            |            |             |                  | Misc.       |
+   |------------+------------+-------------+------------------+-------------|
+   | 0x000F0000 | 0x000FFFFF | 64 KiB      | ROM              | Motherboard |
+   |            |            |             |                  | BIOS        |
+   +------------------------------------------------------------------------+
+
+"Upper" Memory (> 1 MiB)
+
+   The region of RAM above 1 MiB is not standardized, well-defined, or
+   contiguous. There are likely to be regions of it that contain memory
+   mapped hardware, that nothing but a device driver should ever access.
+   There are likely to be regions of it that contain ACPI tables which your
+   initialization code will probably want to read, and that then can be
+   overwritten and reused. Some ACPI areas cannot be "reclaimed" this way.
+   Some of the computer's RAM may extend above 4 GiB.
+
+   Use the BIOS function INT 15h, EAX=0xE820 to get a reliable map of Upper
+   Memory.
+
