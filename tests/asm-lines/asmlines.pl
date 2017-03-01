@@ -8,9 +8,8 @@ use warnings;
 ## this is for the purposes of getting a bunch of understanding of instruction codes
 ## i.e. for my personal benefit
 
-print donasm("jmp 0x0000:0x7c05",'[bits 16]');
-print donasm("mov sp, 0x7500",'[bits 16]');
-exit;
+#print donasm("jmp 0x0000:0x7c05",'[bits 16]');
+#print donasm("mov sp, 0x7500",'[bits 16]');
 while(<DATA>){
     next unless /\S/;
     print donasm($_,"[bits 16]");
