@@ -22,11 +22,11 @@ Actually, we jump to the next instruction at that point.
 
 0000:7C00
 
-    EA 05 7C 00 00 
+    EA 05 7C 00 00  ; jmp (far) 0000:7C05
 
 0000:7C05
 
-    31 C0 8E D0 BC 00 7C 8E D8 8E C0 ; ..|..1.....|....
+    31 C0 8E D0 BC 00 7C 8E D8 8E C0 ; 1.....|....
 
 
 0000:7C10
