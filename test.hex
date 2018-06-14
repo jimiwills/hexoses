@@ -76,12 +76,15 @@ Point to free-space bracket
 
 
 
-    F4 ; ..k|..f.........
+    F4 ; hlt
 
 
 0000:7C30
 
-    EB FD BE 42 7C E8 90 00 F4 EB FD E4 92 0C 02 E6 ; ...B|...........
+    EB FD ; jump -2 (to the previous hlt)
+
+
+    BE 42 7C E8 90 00 F4 EB FD E4 92 0C 02 E6 ; ...B|...........
 
 
 0000:7C40
