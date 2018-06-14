@@ -10,9 +10,15 @@ use warnings;
 
 #print donasm("jmp 0x0000:0x7c05",'[bits 16]');
 #print donasm("mov sp, 0x7500",'[bits 16]');
-while(<DATA>){
+my $PRE = '[bits 16]';
+while(<>){
     next unless /\S/;
-    print donasm($_,"[bits 16]");
+    if(/^\[/){
+        $PRE = $_;
+    }
+    else {
+       print donasm($_,$PRE);
+    }
     #print donasm($_,"[bits 32]");
     #print donasm($_,"[bits 64]");
 

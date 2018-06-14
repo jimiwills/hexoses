@@ -33,17 +33,50 @@ C0 = 11 000 000, which is ax,ax
 001=cx
 010=dx
 
-    31 C0 8E D0 BC 00 7C 8E D8 8E C0 ; 1.....|....
+Anyway, this ensures that ax is zero:
+
+    31 C0 
+
+set up segment registers:
+
+0000:7C07
+
+    8E D0 ;    mov ss,ax      (10001110 11 010 000)
+    BC 00 7C ; mov sp,0x7C00
+    8E D8      mov ds,ax      (10001110 11 011 000)
+    8E C0 ;    mov es,ax      (10001110 11 000 000)
+    8E E0 ;    mov fs,ax      (10001110 11 100 000)
+    8E E8 ;    mov gs,ax      (10001110 11 101 000)
+    FC    ;    cld
+
+0000:7C15
 
 
-0000:7C10
+    E8 63 00 ; call 0x66 (check cpu)
+    72 18    ; jc .nolongmode
+    E8 1E 00 ; call 0x21 (fast A20)
 
-    8E E0 8E E8 FC E8 63 00 72 18 E8 1E 00 B4 42 B2 ; ......c.r.....B.
+0000:7C1D
+
+Load up 2nd sector:
+
+    B4 42 ; mov ah,0x42
+    B2 80 ; mov dl,0x80
+    BE 6B 7C ; mov si,0x7C6B (DAP)
+    CD 13 ; int 0x13 
+
+0000:7C26
+
+Point to free-space bracket
+
+    66 BF 00 90 00 00 ; mov edi, 0x9000
+
+0000:7C2B
+    E9 D7 01 ; jmp 01D7 (rel to end of this instr; SwitchToLongMode)
 
 
-0000:7C20
 
-    80 BE 6B 7C CD 13 66 BF 00 90 00 00 E9 D7 01 F4 ; ..k|..f.........
+    F4 ; ..k|..f.........
 
 
 0000:7C30
@@ -193,7 +226,16 @@ C0 = 11 000 000, which is ax,ax
 
 0000:7E00
 
-    00 00 00 00 00 00 57 66 B9 00 10 00 00 66 31 C0 ; ......Wf.....f1.
+    00 00 00 00 00 00 
+
+0000:7E06 SwitchToLongMode:
+
+    57 ; push di
+    66 B9 00 10 00 00 ;  mov ecx, 0x1000 
+
+
+0000:7E0D
+    66 31 C0 ; ......Wf.....f1.
 
 
 0000:7E10
