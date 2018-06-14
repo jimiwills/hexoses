@@ -26,9 +26,12 @@ Actually, we jump to the next instruction at that point.
 
 0000:7C05
 
-31 = XOR?
-
-
+31 = XOR
+C0 = 11 000 000, which is ax,ax
+000=ax
+011=bx
+001=cx
+010=dx
 
     31 C0 8E D0 BC 00 7C 8E D8 8E C0 ; 1.....|....
 
