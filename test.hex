@@ -256,69 +256,145 @@ es:di points to the Page Map Level 4 table.
                                                 ; present flag, writable flag.  
 
 
-      26 66 89 05 ; mov [es:di], eax : ; Store the value of EAX as the first PML4E
+    26 66 89 05 ; mov [es:di], eax : ; Store the value of EAX as the first PML4E
 
-Now up to line 33 in LongModeDirectly.asm
-
-
+Build the Page Directory Pointer Table.
 0000:7E23
 
-     26 66 8D 85 00 20 66 83 C8 03 26 66 89 ; f..&f... f...&f.
+    26 66 8D 85 00 20 ; lea eax, [es:di + 0x2000] address of page dir into eax
+    66 83 C8 03 ; or eax, PAGE_PRESENT | PAGE_WRITE : Or EAX with the flags -
+                                                ; present flag, writable flag.
 
 
-0000:7E30
 
-    85 00 10 26 66 8D 85 00 30 66 83 C8 03 26 66 89 ; ...&f...0f...&f.
+     26 66 89 85 00 10 ; mov [es:di + 0x1000], eax
+                       ; this stores the value as first PDPTE
+
+Build the Page Directory Pointer Table.
+0000:7E33
+
+    26 66 8D 85 00 30 ; lea eax, [es:di + 0x3000] : address of page
+    66 83 C8 03 ; or eax, PAGE_PRESENT | PAGE_WRITE : Or EAX with the flags -
+                                                ; present flag, writable flag. 
+    26 66 89 85 00 20 ; mov [es:di + 0x2000], eax
+                      ; store eax as first PDE
+
+0000:7E43
+
+    57 ; push di
+    8D BD 00 30 ; lea di, [di + 0x3000] : point di to the page
+
+    66 B8 03 00 00 00 ; mov eax, PAGE_PRESENT | PAGE_WRITE
+                      ; move flags to eax and point to 0x0000
+
+Build page table 
+0000:7E4E .LoopPageTable:
+
+    26 66 89 05 ; mov [es:di], eax 
+    66 05 00 10 00 00 ; add eax, 0x1000
+    83 C7 08 ; add di, 8 
+    66 3D 00 00 20 00 ; cmp eax, 0x200000 : end if 2MiB done
+    72 EB ; jb .LoopPageTable
+
+    5F ; pop di
+    
+0000:7E64
+disable IRQ ... 
+
+    B0 FF ; mov al, 0xFF : 
+    E6 A1 ; out 0xA1, al 
+    E6 21 ; out 0x21, al 
+
+    90 90 ; nop nop
 
 
-0000:7E40
 
-    85 00 20 57 8D BD 00 30 66 B8 03 00 00 00 26 66 ; .. W...0f.....&f
+0000:7E6C
+load our zero LDT so NMI causes triple fault
 
+    0F 01 1E 00 7E ; lidt [IDT] 
 
-0000:7E50
+Enter Long mode
+0000:7E71
 
-	89 05 66 05 00 10 00 00 83 C7 08 66 3D 00 00 20 ; ..f........f=..
+    66 B8 A0 00 00 00 ; mov eax, 10100000b : set pae/pge
+    0F 22 E0 ; mov cr4, eax 
 
-
-0000:7E60
-
-    00 72 EB 5F B0 FF E6 A1 E6 21 90 90 0F 01 1E 00 ; .r._.....!......
-
-
-0000:7E70
-
-    7E 66 B8 A0 00 00 00 0F 22 E0 66 89 FA 0F 22 DA ; ~f......".f...".
+    66 89 FA ; mov edx, edi : point cr3 at pml4
+    0F 22 DA ; mov cr3, edx
 
 
 0000:7E80
+set lme bit in efer msr
 
-    66 B9 80 00 00 C0 0F 32 66 0D 00 01 00 00 0F 30 ; f......2f......0
+    66 B9 80 00 00 C0 ; mov ecx, 0xC0000080 : read from EFER MSR
+    0F 32 ; rdmsr
 
+    66 0D 00 01 00 00 ; or eax, 0x00000100 : set LME bit
+    0F 30 ; wrmsr
 
 0000:7E90
+activate long mode by enabling paging and protection simultaneously
 
-    0F 20 C3 66 81 CB 01 00 00 80 0F 22 C3 0F 01 16 ; . .f......."....
+    0F 20 C3 ; mov ebx, cr0
+    66 81 CB 01 00 00 80 ; or ebx,0x80000001
+    0F 22 C3 ; mov cr0, ebx 
 
-
-0000:7EA0
-
-    C2 7E EA C8 7E 08 00 00 00 00 00 00 00 00 00 00 ; .~..~...........
-
-
-0000:7EB0
-
-    00 00 00 00 9A 20 00 00 00 00 00 00 92 00 00 90 ; ..... ..........
+    0F 01 16 C2 ; lgdt [GDT.Pointer]  : Load GDT.Pointer defined below. 
 
 
-0000:7EC0
+0000:7EA1
 
-    00 00 1A 00 A7 7E 00 00 66 B8 10 00 8E D8 8E C0 ; .....~..f.......
+    7E EA C8 7E 08 00 ; jmp CODE_SEG:LongMode  : Load CS with 64 bit segment
+                                              ; and flush the instruction cache 
+
+0000:7EA7
+GDT:
+.Null
+
+    00 00 00 00 00 00 00 00 ; dq 0x0 : null descriptor
+
+.Code
+
+    00 00 00 00 00 9A 20 00 ; dq 0x00209A0000000000 : 64-bit code descr (xr). 
+
+0000:7EB7
+
+    00 00 00 00 00 92 00 00 ; dq 0x0000920000000000 : 64-bit data descr (rw). 
+
+0000:7EBF
 
 
-0000:7ED0
+    90 ; what's this doing here? is it just trash?
 
-    8E E0 8E E8 8E D0 BF 00 80 0B 00 B9 F4 01 00 00 ; ................
+    00 00 ; dw 0x0 align on 4-byte boundary...
+
+
+.Pointer
+
+
+    1A 00 ; dw $-GDT-1 : 16-bit size limit of GDT
+    A7 7E 00 00 ; 32-bit base address of GDT
+
+
+0000:7EC8
+[BITS 64]
+LongMode:
+
+    66 B8 10 00 ; mov ax, DATA_SEG
+    8E D8 ; mov ds, ax
+    8E C0 ; mov es, ax
+    8E E0 ; mov fs, ax
+    8E E8 ; mov gs, ax
+    8E D0 ; mov ss, ax
+
+Up to line 112 in LongModeDirectly!!
+
+
+0000:7ED6
+
+
+    BF 00 80 0B 00 B9 F4 01 00 00 ; ................
 
 
 0000:7EE0
