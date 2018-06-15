@@ -76,12 +76,9 @@ Point to free-space bracket
     E9 D7 01 ; jmp 01D7 (rel to end of this instr; SwitchToLongMode)
 
 if we didn't jump, halt!
+0000:7C2F Main.Long
 
     F4 ; hlt
-
-
-0000:7C30
-
     EB FD ; jump -2 (to the previous hlt)
 
 Main.NoLongMode 0000:7C32
@@ -381,113 +378,68 @@ GDT:
 [BITS 64]
 LongMode:
 
-    66 B8 10 00 ; mov ax, DATA_SEG
+    66 B8 10 00 ; mov ax, DATA_SEG   {%define DATA_SEG     0x0010}
     8E D8 ; mov ds, ax
     8E C0 ; mov es, ax
     8E E0 ; mov fs, ax
     8E E8 ; mov gs, ax
     8E D0 ; mov ss, ax
 
-Up to line 112 in LongModeDirectly!!
-
-
+; Blank out the screen to a blue color. 
 0000:7ED6
 
 
-    BF 00 80 0B 00 B9 F4 01 00 00 ; ................
+    BF 00 80 0B 00 ; mov edi, 0xB8000
+    B9 F4 01 00 00 ; mov rcx, 500 : Since we are clearing uint64_t over here, 
+                                  ; we put the count as Count/4. 
+
+    48 B8 20 1F 20 1F 20 1F 20 1F ; mov rax, 0x1F201F201F201F20 
+    ; Set the value to set the screen to: 
+    ;  Blue background, white foreground, blank spaces.
 
 
-0000:7EE0
+    F3 48 AB ; rep stosq : clear the entire screen
 
-    48 B8 20 1F 20 1F 20 1F 20 1F F3 48 AB BF 00 80 ; H. . . . ..H....
+Display hello world
+0000:7EED
 
+    BF 00 80 0B 00 ; mov edi, 0x00b8000
 
-0000:7EF0
-
-    0B 00 48 B8 48 1F 65 1F 6C 1F 6C 1F 67 48 89 07 ; ..H.H.e.l.l.gH..
-
-
-0000:7F00
-
-    48 B8 6F 1F 20 1F 57 1F 6F 1F 67 48 89 47 08 48 ; H.o. .W.o.gH.G.H
-
-
-0000:7F10
-
-    B8 72 1F 6C 1F 64 1F 21 1F 67 48 89 47 10 E9 0C ; .r.l.d.!.gH.G...
+    48 B8 48 1F 65 1F 6C 1F 6C 1F ; mov rax, 0x1F6C1F6C1F651F48
+    67 48 89 07                   ; mov [edi],rax 
+    48 B8 6F 1F 20 1F 57 1F 6F 1F ; mov rax, 0x1F6F1F571F201F6F 
+    67 48 89 47 08                ; mov [edi],rax 
+    48 B8 72 1F 6C 1F 64 1F 21 1F ; mov rax, 0x1F211F641F6C1F72
+    67 48 89 47 10                ; mov [edi + 16], rax
 
 
-0000:7F20
-
-    FD FF FF 00 00 00 00 00 00 00 00 00 00 00 00 00 ; ................
 
 
-0000:7F30
+0000:7f1E
 
+    E9 0C FD FF FF ; jmp Main.Long
+
+to 7C2F from here which is 7F23, so that's 2F4 back, 
+and 100000000-2F4 is FFFFFD0C, hence the above
+
+0000:7F23 ; blank until the end of this sector
+
+    00 00 00 00 00 00 00 00 00 00 00 00 00 
     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
-
-
-0000:7F40
-
     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
-
-
-0000:7F50
-
     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
-
-
-0000:7F60
-
     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
-
-
-0000:7F70
-
     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
-
-
-0000:7F80
-
     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
-
-
-0000:7F90
-
     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
-
-
-0000:7FA0
-
     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
-
-
-0000:7FB0
-
     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
-
-
-0000:7FC0
-
     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
-
-
-0000:7FD0
-
     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
-
-
-0000:7FE0
-
     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
-
-
-0000:7FF0
-
     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
 
 
 0000:8000
 
-... now time to comment all this so it's understandable... (need to 
-remember what it all means!)
+So, that's that!
