@@ -1,0 +1,446 @@
+# Longmode direct bindown
+
+This will use bindown.pl from gitlab:jimiwills/bindown to convert to binary.
+
+# hexos1
+
+This is a markdown file, with Hex in the code blocks.
+It's intended to be used will bindown.pl.
+
+## Real mode
+
+We're in real mode, so any interrupts we need to call we should so now,
+before going to long mode.  We'll be going direct!
+
+
+
+~                                    
+
+Boot sector is loaded at address 0000:7c00, therefore we jump (far) to that
+point to ensure the correct addresses are in the registers.
+Actually, we jump to the next instruction at that point.
+
+0000:7C00
+
+    EA 05 7C 00 00  ; jmp (far) 0000:7C05
+
+0000:7C05
+
+31 = XOR
+C0 = 11 000 000, which is ax,ax
+000=ax
+011=bx
+001=cx
+010=dx
+
+Anyway, this ensures that ax is zero:
+
+    31 C0 
+
+set up segment registers:
+
+0000:7C07
+
+    8E D0 ;    mov ss,ax      (10001110 11 010 000)
+    BC 00 7C ; mov sp,0x7C00
+    8E D8 ;     mov ds,ax      (10001110 11 011 000)
+    8E C0 ;    mov es,ax      (10001110 11 000 000)
+    8E E0 ;    mov fs,ax      (10001110 11 100 000)
+    8E E8 ;    mov gs,ax      (10001110 11 101 000)
+    FC    ;    cld
+
+0000:7C15
+
+
+    E8 63 00 ; call 0x66 (check cpu)
+    72 18    ; jc .nolongmode
+    E8 1E 00 ; call 0x21 (fast A20)
+
+0000:7C1D
+
+Load up 2nd sector:
+
+    B4 42 ; mov ah,0x42
+    B2 80 ; mov dl,0x80
+    BE 6B 7C ; mov si,0x7C6B (DAP)
+    CD 13 ; int 0x13 
+
+0000:7C26
+
+Point to free-space bracket
+
+    66 BF 00 90 00 00 ; mov edi, 0x9000
+
+0000:7C2B
+
+    E9 D7 01 ; jmp 01D7 (rel to end of this instr; SwitchToLongMode)
+
+if we didn't jump, halt!
+0000:7C2F Main.Long
+
+    F4 ; hlt
+    EB FD ; jump -2 (to the previous hlt)
+
+Main.NoLongMode 0000:7C32
+
+    BE 42 7C ; mov si, 0x7C42 (No Long Mode Message)
+
+    E8 90 00 ; call 0x0093 - Print
+
+
+    F4 ; hlt
+    EB FD ; jmp -2, to the hlt
+
+
+
+
+0000:7C3B
+
+A20 line
+
+    E4 92 ; in al, 0x92
+    0C 02 ; or al, 2
+    E6 92 ; out 0x92, al
+    C3    ; ret
+
+0000:7C42 ; NoLongMode Message:
+
+    45 52 52 4F 52 3A 20 43 50 55 20 64 6F 65 ; ..ERROR: CPU doe
+    73 20 6E 6F 74 20 73 75 70 70 6F 72 74 20 6C 6F ; s not support lo
+    6E 67 20 6D 6F 64 65 2E 0A 0D 00 ; ng mode
+
+0000:7C6B
+DAP
+
+    10          ; db 0x10   : DAP length
+    00          ; db 0x0    : unused
+    01 00       ; dw 0x1    : number sectors to read
+    00 7E       ; dw 0x7e00 : mem offset
+    00 00       ; dw 0x0    : and segment
+    01 00 00 00
+    00 00 00 00 ; dq 0x01   : sector of disk to start on
+
+
+
+0000:7C7B  
+CheckCPU
+Check whether CPUID is supported or not.
+
+
+    66 9C ; pushfd    Get flags in EAX register. 
+    66 58 ; pop eax
+    66 89 C1 ; mov ecx, eax 
+    66 35 00 00 20 00 ; xor eax, 0x200000 
+    66 50 ;  push eax 
+    66 9D ; popfd
+    
+    66 9C ; pushfd
+    66 58 ; pop eax 
+    66 31 C8 ; xor eax, ecx 
+    66 C1 E8 15 ; shr eax, 21 
+    66 83 E0 01 ; and eax, 1    : Check whether bit 21 is set or not. 
+                                ; If EAX now contains 0, CPUID isn't supported. 
+    66 51 ; push ecx
+    66 9D ; popfd
+
+    66 85 C0 ; test eax, eax 
+    74 22 ; jz CheckCPU.NoLongMode 
+
+0000:7CA4
+
+
+    66 B8 00 00 00 80 ; mov eax, 0x80000000 
+    0F A2 ; cpuid
+    66 3D 01 00 00 80 ; cmp eax, 0x80000001 : Check whether extended function
+                                            ; 0x80000001 is available are not. 
+    72 12 ; jb 12
+
+0000:7CB4
+
+
+    66 B8 01 00 00 80 ; mov eax, 0x80000001 
+    0F A2 ; cpuid
+    66 F7 C2 00 00 00 20 ; test edx, 1 << 29
+    74 01 ; jz 1
+    C3 ; ret
+
+0000:7CC6
+
+    F9 ; stc
+    C3 ; ret
+
+PRINT
+0000:7CC8
+
+    66 60 ; pushad
+
+.PrintLoop:
+
+    AC ; lodsb :  Load the value at [@es:@si] in @al. 
+    84 C0 ; test al, al : If AL is the terminator character, stop printing
+    74 06 ; je printdone
+
+
+    B4 0E ; mov ah, 0x0E 
+    CD 10 ; int 0x10 
+    EB F5 ; jmp .PrintLoop  : Loop till the null character not found.
+
+0000:7CD5
+printdone
+
+    66 61 ; popad  : Pop all general purpose registers to save them
+    C3 ; ret
+
+
+0000:7CD8
+
+    00 00 00 00 00 00 00 00
+
+0000:7CE0 -- fill with zeroes until the 55-AA
+
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 55 AA 
+
+
+# 2nd SECTOR!
+
+0000:7E00
+IDT:
+     
+    00 00       ; .Length       dw 0
+    00 00 00 00 ; .Base         dd 0
+
+0000:7E06 SwitchToLongMode:
+
+    57 ; push di
+    66 B9 00 10 00 00 ;  mov ecx, 0x1000 
+
+
+0000:7E0D
+
+    66 31 C0 ; xor eax, eax 
+
+
+0000:7E10
+
+    FC ; cld 
+    F3 66 AB ; rep stosd 
+    5F ; pop di  : get DI back
+
+Build the Page Map Level 4. 
+es:di points to the Page Map Level 4 table. 
+
+
+    26 66 8D 85 00 10 ; lea eax, [es:di + 0x1000] : Put the address of the Page
+                                            ; Directory Pointer Table in to EAX. 
+
+    66 83 C8 03 ; or eax, PAGE_PRESENT | PAGE_WRITE : Or EAX with the flags -
+                                                ; present flag, writable flag.  
+
+
+    26 66 89 05 ; mov [es:di], eax : ; Store the value of EAX as the first PML4E
+
+Build the Page Directory Pointer Table.
+0000:7E23
+
+    26 66 8D 85 00 20 ; lea eax, [es:di + 0x2000] address of page dir into eax
+    66 83 C8 03 ; or eax, PAGE_PRESENT | PAGE_WRITE : Or EAX with the flags -
+                                                ; present flag, writable flag.
+
+
+
+     26 66 89 85 00 10 ; mov [es:di + 0x1000], eax
+                       ; this stores the value as first PDPTE
+
+Build the Page Directory Pointer Table.
+0000:7E33
+
+    26 66 8D 85 00 30 ; lea eax, [es:di + 0x3000] : address of page
+    66 83 C8 03 ; or eax, PAGE_PRESENT | PAGE_WRITE : Or EAX with the flags -
+                                                ; present flag, writable flag. 
+    26 66 89 85 00 20 ; mov [es:di + 0x2000], eax
+                      ; store eax as first PDE
+
+0000:7E43
+
+    57 ; push di
+    8D BD 00 30 ; lea di, [di + 0x3000] : point di to the page
+
+    66 B8 03 00 00 00 ; mov eax, PAGE_PRESENT | PAGE_WRITE
+                      ; move flags to eax and point to 0x0000
+
+Build page table 
+0000:7E4E .LoopPageTable:
+
+    26 66 89 05 ; mov [es:di], eax 
+    66 05 00 10 00 00 ; add eax, 0x1000
+    83 C7 08 ; add di, 8 
+    66 3D 00 00 20 00 ; cmp eax, 0x200000 : end if 2MiB done
+    72 EB ; jb .LoopPageTable
+
+    5F ; pop di
+    
+0000:7E64
+disable IRQ ... 
+
+    B0 FF ; mov al, 0xFF : 
+    E6 A1 ; out 0xA1, al 
+    E6 21 ; out 0x21, al 
+
+    90 90 ; nop nop
+
+
+
+0000:7E6C
+load our zero LDT so NMI causes triple fault
+
+    0F 01 1E 00 7E ; lidt [IDT] 
+
+Enter Long mode
+0000:7E71
+
+    66 B8 A0 00 00 00 ; mov eax, 10100000b : set pae/pge
+    0F 22 E0 ; mov cr4, eax 
+
+    66 89 FA ; mov edx, edi : point cr3 at pml4
+    0F 22 DA ; mov cr3, edx
+
+
+0000:7E80
+set lme bit in efer msr
+
+    66 B9 80 00 00 C0 ; mov ecx, 0xC0000080 : read from EFER MSR
+    0F 32 ; rdmsr
+
+    66 0D 00 01 00 00 ; or eax, 0x00000100 : set LME bit
+    0F 30 ; wrmsr
+
+0000:7E90
+activate long mode by enabling paging and protection simultaneously
+
+    0F 20 C3 ; mov ebx, cr0
+    66 81 CB 01 00 00 80 ; or ebx,0x80000001
+    0F 22 C3 ; mov cr0, ebx 
+
+    0F 01 16 C2 ; lgdt [GDT.Pointer]  : Load GDT.Pointer defined below. 
+
+
+0000:7EA1
+
+    7E EA C8 7E 08 00 ; jmp CODE_SEG:LongMode  : Load CS with 64 bit segment
+                                              ; and flush the instruction cache 
+
+0000:7EA7
+GDT:
+.Null
+
+    00 00 00 00 00 00 00 00 ; dq 0x0 : null descriptor
+
+.Code
+
+    00 00 00 00 00 9A 20 00 ; dq 0x00209A0000000000 : 64-bit code descr (xr). 
+
+0000:7EB7
+
+    00 00 00 00 00 92 00 00 ; dq 0x0000920000000000 : 64-bit data descr (rw). 
+
+0000:7EBF
+
+
+    90 ; what's this doing here? is it just trash?
+
+    00 00 ; dw 0x0 align on 4-byte boundary...
+
+
+.Pointer
+
+
+    1A 00 ; dw $-GDT-1 : 16-bit size limit of GDT
+    A7 7E 00 00 ; 32-bit base address of GDT
+
+
+0000:7EC8
+[BITS 64]
+LongMode:
+
+    66 B8 10 00 ; mov ax, DATA_SEG   {%define DATA_SEG     0x0010}
+    8E D8 ; mov ds, ax
+    8E C0 ; mov es, ax
+    8E E0 ; mov fs, ax
+    8E E8 ; mov gs, ax
+    8E D0 ; mov ss, ax
+
+; Blank out the screen to a blue color. 
+0000:7ED6
+
+
+    BF 00 80 0B 00 ; mov edi, 0xB8000
+    B9 F4 01 00 00 ; mov rcx, 500 : Since we are clearing uint64_t over here, 
+                                  ; we put the count as Count/4. 
+
+    48 B8 20 1F 20 1F 20 1F 20 1F ; mov rax, 0x1F201F201F201F20 
+    ; Set the value to set the screen to: 
+    ;  Blue background, white foreground, blank spaces.
+
+
+    F3 48 AB ; rep stosq : clear the entire screen
+
+Display hello world
+0000:7EED
+
+    BF 00 80 0B 00 ; mov edi, 0x00b8000
+
+    48 B8 48 1F 65 1F 6C 1F 6C 1F ; mov rax, 0x1F6C1F6C1F651F48
+    67 48 89 07                   ; mov [edi],rax 
+    48 B8 6F 1F 20 1F 57 1F 6F 1F ; mov rax, 0x1F6F1F571F201F6F 
+    67 48 89 47 08                ; mov [edi],rax 
+    48 B8 72 1F 6C 1F 64 1F 21 1F ; mov rax, 0x1F211F641F6C1F72
+    67 48 89 47 10                ; mov [edi + 16], rax
+
+
+
+
+0000:7f1E
+
+    E9 0C FD FF FF ; jmp Main.Long
+
+to 7C2F from here which is 7F23, so that's 2F4 back, 
+and 100000000-2F4 is FFFFFD0C, hence the above
+
+0000:7F23 ; blank until the end of this sector
+
+    00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+
+
+0000:8000
+
+So, that's that!
